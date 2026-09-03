@@ -1,0 +1,870 @@
+<!--
+  Gold Flex Bulk Domain Rating Checker
+  ====================================
+  Paste everything below into a Custom HTML block, or upload as index.html.
+
+  The worker URL is already filled in:
+      https://gfm-dr.loofycorwin.workers.dev/
+  Nothing in this file needs editing.
+
+  Whatever host this sits on must be listed in ALLOWED_ORIGINS in the
+  worker, or the worker will refuse the request.
+
+  Your Ahrefs key is NOT in this file and must never be added to it —
+  anyone can read a page's source. The key lives in the worker.
+
+  Excel (.xlsx) import loads a reader from cdnjs on demand. CSV and TXT
+  import needs nothing external.
+
+  The "Domain Rating by Ahrefs" credit in the footer is required by the
+  Ahrefs Domain Rating License. Leave it in place.
+-->
+
+<div id="dr-widget" class="gfm-dr">
+	<div class="drw-head">
+		<h2>Bulk Domain Rating Checker</h2>
+		<p>Check the Ahrefs Domain Rating of up to 100 sites at once. Paste them in or upload a CSV or Excel file.</p>
+	</div>
+
+	<div class="drw-body">
+		<label class="drw-label" for="drw-input">One domain per line</label>
+		<textarea id="drw-input" rows="5" spellcheck="false" placeholder="ahrefs.com&#10;semrush.com&#10;moz.com"></textarea>
+		<div class="drw-controls">
+			<button type="button" class="drw-primary" id="drw-check">Check DR</button>
+			<button type="button" class="drw-ghost" id="drw-clear">Clear</button>
+			<button type="button" class="drw-ghost" id="drw-csv" disabled>Download CSV</button>
+			<button type="button" class="drw-ghost" id="drw-copy" disabled>Copy</button>
+			<input type="file" id="drw-file" accept=".csv,.txt,.xlsx,.xls" hidden>
+			<label class="drw-file" for="drw-file">Upload CSV or Excel</label>
+			<span class="drw-count" id="drw-count">0 domains</span>
+		</div>
+		<div class="drw-progress" id="drw-progress"><span></span></div>
+		<p class="drw-progress-label" id="drw-progress-label" aria-live="polite"></p>
+	</div>
+
+	<div class="drw-results" id="drw-results">
+		<p class="drw-empty">Scores will appear here.</p>
+	</div>
+
+	<div class="drw-foot">
+		<span>
+			Data: <a href="https://ahrefs.com/" target="_blank" rel="noopener">Domain Rating by Ahrefs</a>
+			&middot; <a href="http://ahrefs.com/legal/domain-rating-license" target="_blank" rel="noopener">License</a>
+		</span>
+		<span id="drw-msg"></span>
+	</div>
+</div>
+
+<style>
+/* Gold Flex Bulk DR Checker
+   Inherits the theme's typeface so the tool reads as part of the site.
+   Only the DR badges and the primary button carry brand colour. */
+
+.gfm-dr {
+	--gfm-violet: #8963fb;
+	--gfm-violet-deep: #5b32c4;
+	--gfm-gold: #ffbd00;
+	--gfm-ink: #222225;
+	--gfm-muted: #6b6b78;
+	--gfm-line: #e6e3f0;
+	--gfm-ground: #faf9fe;
+
+	font-family: inherit;
+	color: var(--gfm-ink);
+	background: #fff;
+	max-width: 760px;
+	margin: 0 auto;
+	border: 1px solid var(--gfm-line);
+	border-radius: 14px;
+	overflow: hidden;
+}
+
+.gfm-dr * { box-sizing: border-box; }
+
+.gfm-dr .drw-head {
+	padding: 24px 26px 20px;
+	border-bottom: 1px solid var(--gfm-line);
+	background: var(--gfm-ground);
+}
+.gfm-dr .drw-head h2 {
+	margin: 0 0 6px;
+	font-size: 1.35rem;
+	line-height: 1.25;
+	color: var(--gfm-ink);
+}
+.gfm-dr .drw-head p {
+	margin: 0;
+	font-size: .9rem;
+	color: var(--gfm-muted);
+	max-width: 58ch;
+}
+
+.gfm-dr .drw-body { padding: 22px 26px 10px; }
+
+.gfm-dr .drw-label {
+	display: block;
+	margin-bottom: 8px;
+	font-size: .8rem;
+	font-weight: 600;
+	color: var(--gfm-muted);
+}
+
+.gfm-dr textarea {
+	width: 100%;
+	min-height: 120px;
+	resize: vertical;
+	padding: 12px 14px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: .875rem;
+	line-height: 1.6;
+	color: var(--gfm-ink);
+	background: var(--gfm-ground);
+	border: 1px solid var(--gfm-line);
+	border-radius: 10px;
+}
+.gfm-dr textarea:focus-visible {
+	outline: 2px solid var(--gfm-violet);
+	outline-offset: 1px;
+	background: #fff;
+}
+
+.gfm-dr .drw-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+	margin-top: 14px;
+}
+
+.gfm-dr button {
+	font: inherit;
+	font-size: .875rem;
+	font-weight: 600;
+	cursor: pointer;
+	border-radius: 10px;
+	padding: 10px 18px;
+	border: 1px solid transparent;
+	min-height: 42px;
+}
+.gfm-dr button:focus-visible { outline: 2px solid var(--gfm-violet); outline-offset: 2px; }
+
+.gfm-dr .drw-primary { background: var(--gfm-violet); color: #fff; }
+.gfm-dr .drw-primary:hover:not(:disabled) { background: var(--gfm-violet-deep); }
+.gfm-dr .drw-primary:disabled { opacity: .6; cursor: progress; }
+
+.gfm-dr .drw-ghost { background: #fff; color: var(--gfm-ink); border-color: var(--gfm-line); }
+.gfm-dr .drw-ghost:hover:not(:disabled) { background: var(--gfm-ground); }
+.gfm-dr .drw-ghost:disabled { opacity: .45; cursor: not-allowed; }
+
+/* The file picker's label is the visible button; the input itself is hidden. */
+.gfm-dr .drw-file {
+	display: inline-flex;
+	align-items: center;
+	font-size: .875rem;
+	font-weight: 600;
+	cursor: pointer;
+	border-radius: 10px;
+	padding: 10px 18px;
+	min-height: 42px;
+	background: #fff;
+	color: var(--gfm-ink);
+	border: 1px dashed var(--gfm-line);
+}
+.gfm-dr .drw-file:hover { background: var(--gfm-ground); border-color: var(--gfm-violet); }
+.gfm-dr input[type="file"]:focus-visible + .drw-file { outline: 2px solid var(--gfm-violet); outline-offset: 2px; }
+
+.gfm-dr.is-dropping { border-color: var(--gfm-violet); box-shadow: 0 0 0 3px rgba(137, 99, 251, .15); }
+.gfm-dr.is-dropping .drw-file { border-color: var(--gfm-violet); background: var(--gfm-ground); }
+
+.gfm-dr .drw-count { font-size: .8rem; color: var(--gfm-muted); margin-left: auto; }
+.gfm-dr .drw-count.is-over { color: #a8710a; }
+
+.gfm-dr .drw-progress {
+	height: 5px;
+	background: var(--gfm-line);
+	border-radius: 999px;
+	overflow: hidden;
+	margin: 18px 0 6px;
+	display: none;
+}
+.gfm-dr .drw-progress > span {
+	display: block;
+	height: 100%;
+	width: 0;
+	background: var(--gfm-violet);
+	transition: width .25s ease;
+}
+.gfm-dr .drw-progress-label {
+	display: none;
+	margin: 0;
+	font-size: .78rem;
+	color: var(--gfm-muted);
+}
+
+.gfm-dr .drw-results { padding: 10px 26px 6px; }
+.gfm-dr .drw-empty { padding: 26px 0; text-align: center; color: var(--gfm-muted); font-size: .9rem; }
+
+.gfm-dr table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.gfm-dr thead th {
+	text-align: left;
+	font-size: .75rem;
+	font-weight: 600;
+	color: var(--gfm-muted);
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--gfm-line);
+	white-space: nowrap;
+}
+.gfm-dr thead th[data-sort] { cursor: pointer; user-select: none; }
+.gfm-dr thead th[data-sort]:hover { color: var(--gfm-ink); }
+.gfm-dr .drw-arrow { font-size: .65rem; }
+.gfm-dr tbody td { padding: 11px 10px; border-bottom: 1px solid var(--gfm-line); }
+.gfm-dr tbody tr:last-child td { border-bottom: 0; }
+
+.gfm-dr .drw-domain {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: .82rem;
+	word-break: break-all;
+}
+
+/* DR badge: a grey-gold-violet ramp, low to high. */
+.gfm-dr .drw-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 48px;
+	height: 30px;
+	padding: 0 10px;
+	border-radius: 8px;
+	font-weight: 700;
+	font-size: .95rem;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Batch summary — the numbers you actually want after a bulk run. */
+.gfm-dr .drw-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 4px 0 18px;
+}
+.gfm-dr .drw-stat {
+	flex: 1 1 110px;
+	padding: 12px 14px;
+	background: var(--gfm-ground);
+	border: 1px solid var(--gfm-line);
+	border-radius: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.gfm-dr .drw-stat-num {
+	font-size: 1.35rem;
+	font-weight: 600;
+	line-height: 1.1;
+	color: var(--gfm-violet-deep);
+	font-variant-numeric: tabular-nums;
+}
+.gfm-dr .drw-stat-lbl {
+	font-size: .72rem;
+	color: var(--gfm-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Strength meter — shows each score against the full 0–100 scale. */
+.gfm-dr .drw-meter {
+	height: 6px;
+	background: var(--gfm-line);
+	border-radius: 999px;
+	overflow: hidden;
+	margin-bottom: 6px;
+	max-width: 180px;
+}
+.gfm-dr .drw-meter > span {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	transition: width .4s ease;
+}
+
+/* Waiting on a result. */
+.gfm-dr .drw-pending {
+	background: var(--gfm-line);
+	animation: gfm-dr-pulse 1.4s ease-in-out infinite;
+}
+.gfm-dr .drw-badge.drw-pending { min-width: 48px; height: 30px; }
+@keyframes gfm-dr-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) {
+	.gfm-dr .drw-pending { animation: none; opacity: .6; }
+	.gfm-dr .drw-meter > span { transition: none; }
+}
+
+.gfm-dr tbody tr { transition: background .15s ease; }
+.gfm-dr tbody tr:hover { background: var(--gfm-ground); }
+
+.gfm-dr .drw-domain a {
+	color: var(--gfm-violet-deep);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+}
+.gfm-dr .drw-domain a:hover,
+.gfm-dr .drw-domain a:focus-visible { border-bottom-color: currentColor; }
+
+.gfm-dr .drw-tier { font-size: .82rem; color: var(--gfm-muted); }
+.gfm-dr .drw-status-err { color: #a8710a; font-size: .8rem; }
+.gfm-dr .drw-dash { color: var(--gfm-muted); }
+
+.gfm-dr .drw-spin {
+	width: 15px;
+	height: 15px;
+	border: 2px solid rgba(255, 255, 255, .45);
+	border-top-color: #fff;
+	border-radius: 50%;
+	display: inline-block;
+	animation: gfm-dr-rot .7s linear infinite;
+}
+@keyframes gfm-dr-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+	.gfm-dr .drw-spin { animation-duration: 2s; }
+	.gfm-dr .drw-progress > span { transition: none; }
+}
+
+.gfm-dr .drw-foot {
+	padding: 14px 26px 18px;
+	border-top: 1px solid var(--gfm-line);
+	font-size: .78rem;
+	color: var(--gfm-muted);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: space-between;
+	align-items: center;
+}
+.gfm-dr .drw-foot a { color: var(--gfm-violet-deep); }
+.gfm-dr #drw-msg.is-error { color: #a8710a; }
+
+@media (max-width: 540px) {
+	.gfm-dr .drw-head,
+	.gfm-dr .drw-body,
+	.gfm-dr .drw-results,
+	.gfm-dr .drw-foot { padding-left: 18px; padding-right: 18px; }
+	.gfm-dr .drw-count { margin-left: 0; width: 100%; }
+	.gfm-dr .drw-tier { display: none; }
+	.gfm-dr .drw-meter { max-width: 90px; margin-bottom: 0; }
+	.gfm-dr .drw-stat { flex-basis: 45%; }
+}
+</style>
+
+<script>
+/* Gold Flex Bulk DR Checker — front end.
+   Talks only to this site's own REST route; the Ahrefs key lives on the server. */
+(function () {
+	"use strict";
+
+	/* Your Cloudflare Worker. Already filled in. */
+	var ENDPOINT = "https://gfm-dr.loofycorwin.workers.dev/";
+
+	/* Most domains one visitor can submit at a time. */
+	var MAX_DOMAINS = 100;
+
+	var MAX_CONCURRENCY = 4;
+
+	/* Starting pace. If Ahrefs throttles us mid-run we widen it automatically
+	   rather than failing the remaining domains. */
+	var START_INTERVAL_MS = 300;
+	var MAX_INTERVAL_MS = 2000;
+	var pace = START_INTERVAL_MS;
+	var REQUEST_TIMEOUT_MS = 20000;
+	var RETRY_ON_BUSY = 4;
+	var RETRY_DELAY_MS = 1200;
+
+	var $ = function (id) { return document.getElementById(id); };
+	var input = $("drw-input");
+	if (!input) { return; }
+
+	var btnCheck = $("drw-check");
+	var btnClear = $("drw-clear");
+	var btnCsv = $("drw-csv");
+	var btnCopy = $("drw-copy");
+	var countEl = $("drw-count");
+	var resultsEl = $("drw-results");
+	var progressWrap = $("drw-progress");
+	var progressBar = progressWrap.querySelector("span");
+	var progressLabel = $("drw-progress-label");
+	var msgEl = $("drw-msg");
+
+	var results = [];
+	var sortKey = "dr";
+	var sortDir = -1;
+	var running = false;
+
+	/* Low to high: grey, gold, violet. */
+	function tierFor(dr) {
+		if (dr >= 86) return { label: "Elite", bg: "#3d1f8c", fg: "#ffffff" };
+		if (dr >= 71) return { label: "Very strong", bg: "#5b32c4", fg: "#ffffff" };
+		if (dr >= 51) return { label: "Strong", bg: "#8963fb", fg: "#ffffff" };
+		if (dr >= 31) return { label: "Established", bg: "#ffbd00", fg: "#222225" };
+		if (dr >= 11) return { label: "Growing", bg: "#ffe28a", fg: "#222225" };
+		return { label: "New or low", bg: "#e7e7ec", fg: "#56565f" };
+	}
+
+	function cleanDomain(raw) {
+		var s = (raw || "").trim().toLowerCase();
+		if (!s) return "";
+		s = s.replace(/^https?:\/\//, "").replace(/^www\./, "");
+		s = s.split("/")[0].split("?")[0].split("#")[0].split(":")[0];
+		return s.replace(/^[.\s]+|[,.\s]+$/g, "");
+	}
+
+	function parseInput() {
+		var raw = input.value.split(/[\n,;\s]+/);
+		var seen = {};
+		var out = [];
+		for (var i = 0; i < raw.length; i++) {
+			var d = cleanDomain(raw[i]);
+			if (d && d.indexOf(".") > 0 && !seen[d]) { seen[d] = 1; out.push(d); }
+		}
+		return out;
+	}
+
+	function updateCount() {
+		var n = parseInput().length;
+		var over = n > MAX_DOMAINS;
+		countEl.textContent = n + (n === 1 ? " domain" : " domains") +
+			(over ? " — first " + MAX_DOMAINS + " only" : "");
+		countEl.className = "drw-count" + (over ? " is-over" : "");
+	}
+
+	function setMsg(text, isError) {
+		msgEl.textContent = text || "";
+		msgEl.className = isError ? "is-error" : "";
+	}
+
+	function escapeHtml(s) {
+		return String(s).replace(/[&<>"']/g, function (c) {
+			return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+		});
+	}
+
+	function sleep(ms) {
+		return new Promise(function (r) { setTimeout(r, ms); });
+	}
+
+	/* One request. Resolves with a number, or rejects with a message
+	   already worded for a visitor to read. */
+	function fetchOnce(domain) {
+		var ctrl = ("AbortController" in window) ? new AbortController() : null;
+		var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, REQUEST_TIMEOUT_MS) : null;
+
+		var url = ENDPOINT + "?target=" + encodeURIComponent(domain);
+		var opts = { method: "GET", headers: { "Accept": "application/json" } };
+		if (ctrl) opts.signal = ctrl.signal;
+
+		var request = fetch(url, opts).catch(function (e) {
+			// Sandboxed preview frames can't pass an AbortSignal across windows.
+			// Drop it and go again rather than failing the lookup.
+			if (/clone|postMessage/i.test((e && e.message) || "")) {
+				delete opts.signal;
+				return fetch(url, opts);
+			}
+			throw e;
+		});
+
+		return request.then(function (res) {
+			if (timer) clearTimeout(timer);
+			return res.text().then(function (text) {
+				var data = null;
+				try { data = JSON.parse(text); } catch (e) { /* ignore */ }
+
+				if (!res.ok) {
+					var err = new Error((data && data.error) || "Lookup failed");
+					err.busy = (res.status === 429);
+					throw err;
+				}
+				var dr = data && data.domain_rating && data.domain_rating.domain_rating;
+				if (dr == null || isNaN(dr)) throw new Error("No score available");
+				return Math.round(Number(dr) * 10) / 10;
+			});
+		}).catch(function (err) {
+			if (timer) clearTimeout(timer);
+			if (err && err.name === "AbortError") throw new Error("Timed out");
+			if (err instanceof TypeError) throw new Error("Connection problem");
+			throw err;
+		});
+	}
+
+	function fetchDR(domain, attempt) {
+		attempt = attempt || 0;
+		return fetchOnce(domain).then(function (dr) {
+			var t = tierFor(dr);
+			return { domain: domain, dr: dr, tier: t.label, bg: t.bg, fg: t.fg, status: "ok", error: "" };
+		}).catch(function (err) {
+			if (err.busy) {
+				// Throttled: slow everything still queued, then retry this one.
+				pace = Math.min(pace * 2, MAX_INTERVAL_MS);
+				if (attempt < RETRY_ON_BUSY) {
+					return sleep(RETRY_DELAY_MS * (attempt + 1)).then(function () {
+						return fetchDR(domain, attempt + 1);
+					});
+				}
+			}
+			return { domain: domain, dr: null, tier: "", status: "error", error: err.message || "Lookup failed" };
+		});
+	}
+
+	function runQueue(domains) {
+		return new Promise(function (resolve) {
+			var idx = 0, active = 0, done = 0, lastStart = 0;
+			var total = domains.length;
+
+			function tick() {
+				if (done === total) { resolve(); return; }
+				while (active < MAX_CONCURRENCY && idx < total) {
+					var wait = Math.max(0, lastStart + pace - Date.now());
+					if (wait > 0) { setTimeout(tick, wait); return; }
+					lastStart = Date.now();
+					active++;
+					(function (domain, position) {
+						fetchDR(domain).then(function (r) {
+							results[position] = r;
+							active--; done++;
+							setProgress(done, total);
+							renderTable();
+							tick();
+						});
+					})(domains[idx], idx);
+					idx++;
+				}
+			}
+			tick();
+		});
+	}
+
+	function setProgress(done, total) {
+		progressBar.style.width = (total ? Math.round((done / total) * 100) : 0) + "%";
+		progressLabel.textContent = "Checked " + done + " of " + total;
+	}
+
+	function sortResults() {
+		var rows = results.filter(Boolean).slice();
+		if (running) return rows; // don't reshuffle under the reader mid-run
+		return rows.sort(function (a, b) {
+			if (sortKey === "domain") return a.domain.localeCompare(b.domain) * sortDir;
+			var av = (a.dr == null) ? -1 : a.dr;
+			var bv = (b.dr == null) ? -1 : b.dr;
+			return (av - bv) * sortDir;
+		});
+	}
+
+	function arrow(key) {
+		if (sortKey !== key) return "";
+		return ' <span class="drw-arrow">' + (sortDir === -1 ? "\u25BC" : "\u25B2") + "</span>";
+	}
+
+	function renderSummary() {
+		var ok = results.filter(function (r) { return r && r.status === "ok"; });
+		if (ok.length < 2) return "";
+
+		var total = 0, best = ok[0], strong = 0;
+		for (var i = 0; i < ok.length; i++) {
+			total += ok[i].dr;
+			if (ok[i].dr > best.dr) best = ok[i];
+			if (ok[i].dr >= 51) strong++;
+		}
+		var avg = Math.round((total / ok.length) * 10) / 10;
+
+		return '<div class="drw-summary">' +
+			'<div class="drw-stat"><span class="drw-stat-num">' + ok.length + '</span>' +
+			'<span class="drw-stat-lbl">checked</span></div>' +
+			'<div class="drw-stat"><span class="drw-stat-num">' + avg + '</span>' +
+			'<span class="drw-stat-lbl">average DR</span></div>' +
+			'<div class="drw-stat"><span class="drw-stat-num">' + best.dr + '</span>' +
+			'<span class="drw-stat-lbl">highest &mdash; ' + escapeHtml(best.domain) + '</span></div>' +
+			'<div class="drw-stat"><span class="drw-stat-num">' + strong + '</span>' +
+			'<span class="drw-stat-lbl">at DR 51+</span></div>' +
+			"</div>";
+	}
+
+	function renderTable() {
+		var rows = sortResults();
+		if (!rows.length && !running) {
+			resultsEl.innerHTML = '<p class="drw-empty">Scores will appear here.</p>';
+			return;
+		}
+
+		var html = renderSummary() +
+			'<table><thead><tr>' +
+			'<th data-sort="domain" scope="col">Domain' + arrow("domain") + '</th>' +
+			'<th data-sort="dr" scope="col">DR' + arrow("dr") + '</th>' +
+			'<th class="drw-th-tier" scope="col">Strength</th>' +
+			'</tr></thead><tbody>';
+
+		for (var i = 0; i < rows.length; i++) {
+			var r = rows[i];
+			var drCell, strengthCell;
+
+			if (r.status === "ok") {
+				drCell = '<span class="drw-badge" style="background:' + r.bg + ';color:' + r.fg + '">' +
+					r.dr + "</span>";
+				strengthCell =
+					'<div class="drw-meter"><span style="width:' + r.dr + '%;background:' + r.bg + '"></span></div>' +
+					'<span class="drw-tier">' + r.tier + "</span>";
+			} else if (r.status === "pending") {
+				drCell = '<span class="drw-badge drw-pending"></span>';
+				strengthCell = '<div class="drw-meter drw-pending"></div>';
+			} else {
+				drCell = '<span class="drw-dash">\u2014</span>';
+				strengthCell = '<span class="drw-status-err">' + escapeHtml(r.error) + "</span>";
+			}
+
+			html += '<tr><td class="drw-domain">' + domainCell(r.domain) + "</td>" +
+				"<td>" + drCell + "</td>" +
+				'<td class="drw-td-tier">' + strengthCell + "</td></tr>";
+		}
+		resultsEl.innerHTML = html + "</tbody></table>";
+
+		var ths = resultsEl.querySelectorAll("th[data-sort]");
+		for (var j = 0; j < ths.length; j++) {
+			ths[j].addEventListener("click", function () {
+				if (running) return;
+				var key = this.getAttribute("data-sort");
+				if (sortKey === key) { sortDir *= -1; }
+				else { sortKey = key; sortDir = (key === "domain") ? 1 : -1; }
+				renderTable();
+			});
+		}
+	}
+
+	/* Only treat something as a real hostname if it survives this. */
+	var HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/;
+
+	function domainCell(domain) {
+		var safe = escapeHtml(domain);
+		if (!HOSTNAME_RE.test(domain)) return safe;
+		return '<a href="https://' + safe + '" target="_blank" rel="nofollow noopener noreferrer">' +
+			safe + "</a>";
+	}
+
+	/* Tab-separated: pastes straight into Excel columns, no import wizard. */
+	function toTSV() {
+		var rows = sortResults();
+		var lines = ["Domain\tDR\tTier"];
+		for (var i = 0; i < rows.length; i++) {
+			var r = rows[i];
+			lines.push(r.domain + "\t" + (r.dr == null ? "" : r.dr) + "\t" + (r.tier || ""));
+		}
+		return lines.join("\n");
+	}
+
+	function toCSV() {
+		var rows = sortResults();
+		var lines = ['"domain","domain_rating","tier","status"'];
+		for (var i = 0; i < rows.length; i++) {
+			var r = rows[i];
+			lines.push('"' + r.domain + '","' + (r.dr == null ? "" : r.dr) + '","' +
+				(r.tier || "") + '","' + (r.status === "ok" ? "ok" : r.error) + '"');
+		}
+		return lines.join("\n");
+	}
+
+	/* ---------- Importing a file ---------- */
+
+	var XLSX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+	var xlsxLoading = null;
+
+	function loadXlsx() {
+		if (window.XLSX) return Promise.resolve(window.XLSX);
+		if (xlsxLoading) return xlsxLoading;
+		xlsxLoading = new Promise(function (resolve, reject) {
+			var tag = document.createElement("script");
+			tag.src = XLSX_CDN;
+			tag.onload = function () { resolve(window.XLSX); };
+			tag.onerror = function () { reject(new Error("Could not load the spreadsheet reader")); };
+			document.head.appendChild(tag);
+		});
+		return xlsxLoading;
+	}
+
+	/* Pull anything domain-shaped out of arbitrary text or cells. */
+	function harvestDomains(text) {
+		var parts = String(text).split(/[\n\r,;\t"']+/);
+		var out = [];
+		for (var i = 0; i < parts.length; i++) {
+			var d = cleanDomain(parts[i]);
+			if (d && HOSTNAME_RE.test(d)) out.push(d);
+		}
+		return out;
+	}
+
+	function addDomains(list, filename) {
+		if (!list.length) {
+			setMsg("No domains found in " + filename, true);
+			return;
+		}
+		var existing = input.value.trim();
+		input.value = (existing ? existing + "\n" : "") + list.join("\n");
+		updateCount();
+		var kept = parseInput().length;
+		setMsg("Loaded " + list.length + " from " + filename +
+			(kept > MAX_DOMAINS ? " \u2014 only the first " + MAX_DOMAINS + " will be checked" : ""));
+	}
+
+	function importFile(file) {
+		if (!file) return;
+		var name = file.name || "file";
+		var isExcel = /\.xlsx?$/i.test(name);
+
+		if (file.size > 5 * 1024 * 1024) {
+			setMsg("That file is too large (5MB limit)", true);
+			return;
+		}
+
+		setMsg("Reading " + name + "\u2026");
+
+		if (!isExcel) {
+			var reader = new FileReader();
+			reader.onload = function () { addDomains(harvestDomains(reader.result), name); };
+			reader.onerror = function () { setMsg("Could not read " + name, true); };
+			reader.readAsText(file);
+			return;
+		}
+
+		loadXlsx().then(function (XLSX) {
+			var reader = new FileReader();
+			reader.onload = function () {
+				try {
+					var wb = XLSX.read(new Uint8Array(reader.result), { type: "array" });
+					var found = [];
+					wb.SheetNames.forEach(function (sheetName) {
+						var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
+						rows.forEach(function (row) {
+							(row || []).forEach(function (cell) {
+								found = found.concat(harvestDomains(cell));
+							});
+						});
+					});
+					addDomains(found, name);
+				} catch (e) {
+					setMsg("Could not read that spreadsheet", true);
+				}
+			};
+			reader.onerror = function () { setMsg("Could not read " + name, true); };
+			reader.readAsArrayBuffer(file);
+		}).catch(function (e) {
+			setMsg(e.message + " \u2014 try saving as CSV instead", true);
+		});
+	}
+
+	/* events */
+
+	input.addEventListener("input", updateCount);
+
+	var fileInput = $("drw-file");
+	if (fileInput) {
+		fileInput.addEventListener("change", function () {
+			importFile(this.files && this.files[0]);
+			this.value = ""; // let the same file be picked again
+		});
+	}
+
+	/* Dropping a file anywhere on the widget imports it. */
+	var widget = document.getElementById("dr-widget");
+	if (widget) {
+		["dragenter", "dragover"].forEach(function (evt) {
+			widget.addEventListener(evt, function (e) {
+				e.preventDefault();
+				widget.classList.add("is-dropping");
+			});
+		});
+		["dragleave", "drop"].forEach(function (evt) {
+			widget.addEventListener(evt, function (e) {
+				e.preventDefault();
+				if (evt === "dragleave" && widget.contains(e.relatedTarget)) return;
+				widget.classList.remove("is-dropping");
+			});
+		});
+		widget.addEventListener("drop", function (e) {
+			if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+				importFile(e.dataTransfer.files[0]);
+			}
+		});
+	}
+
+	btnClear.addEventListener("click", function () {
+		if (running) return;
+		input.value = "";
+		results = [];
+		updateCount();
+		renderTable();
+		btnCsv.disabled = true;
+		btnCopy.disabled = true;
+		setMsg("");
+		progressWrap.style.display = "none";
+		progressLabel.style.display = "none";
+	});
+
+	btnCheck.addEventListener("click", function () {
+		if (running) return;
+		var domains = parseInput();
+		if (!domains.length) { setMsg("Add at least one domain", true); return; }
+		if (domains.length > MAX_DOMAINS) domains = domains.slice(0, MAX_DOMAINS);
+
+		running = true;
+		pace = START_INTERVAL_MS;
+		results = domains.map(function (d) {
+			return { domain: d, dr: null, tier: "", status: "pending", error: "" };
+		});
+		btnCheck.disabled = true;
+		btnClear.disabled = true;
+		btnCsv.disabled = true;
+		btnCopy.disabled = true;
+		btnCheck.innerHTML = '<span class="drw-spin"></span>';
+		setMsg("");
+		progressWrap.style.display = "block";
+		progressLabel.style.display = "block";
+		setProgress(0, domains.length);
+		renderTable();
+
+		runQueue(domains).then(function () {
+			running = false;
+			btnCheck.disabled = false;
+			btnClear.disabled = false;
+			btnCheck.textContent = "Check DR";
+			var ok = results.filter(function (r) { return r && r.status === "ok"; }).length;
+			var bad = results.length - ok;
+			btnCsv.disabled = ok === 0;
+			btnCopy.disabled = ok === 0;
+			setMsg(ok + " checked" + (bad ? ", " + bad + " failed" : ""), bad > 0);
+			renderTable();
+			setTimeout(function () {
+				progressWrap.style.display = "none";
+				progressLabel.style.display = "none";
+			}, 800);
+		});
+	});
+
+	btnCsv.addEventListener("click", function () {
+		var blob = new Blob([toCSV()], { type: "text/csv;charset=utf-8" });
+		var a = document.createElement("a");
+		a.href = URL.createObjectURL(blob);
+		a.download = "domain-ratings.csv";
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(a.href);
+	});
+
+	btnCopy.addEventListener("click", function () {
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard.writeText(toTSV()).then(function () {
+				setMsg("Copied — paste straight into Excel");
+			});
+		} else {
+			setMsg("Copying is not supported in this browser", true);
+		}
+	});
+
+	updateCount();
+})();
+</script>
