@@ -964,7 +964,7 @@
 		wb.created = new Date();
 
 		var ws = wb.addWorksheet("Domain Ratings", {
-			views: [{ state: "frozen", ySplit: 5 }]
+			views: [{ state: "frozen", ySplit: 4 }]
 		});
 		// #, Domain, DR, Tier
 		ws.columns = [{ width: 6 }, { width: 42 }, { width: 12 }, { width: 20 }];
@@ -994,22 +994,16 @@
 		});
 
 		ws.mergeCells("A2:D2");
-		var link = ws.getCell("A2");
-		link.value = { text: "goldflexmarketing.com", hyperlink: "https://goldflexmarketing.com/" };
-		link.font = { color: { argb: BRAND.violetDeep }, underline: true, size: 10, bold: true };
-		link.alignment = { indent: 1 };
-
-		ws.mergeCells("A3:D3");
-		var when = ws.getCell("A3");
+		var when = ws.getCell("A2");
 		when.value = "Generated " + new Date().toLocaleDateString() +
 			"  \u00b7  Data: Domain Rating by Ahrefs";
 		when.font = { color: { argb: "FF6B6B78" }, size: 9 };
 		when.alignment = { indent: 1 };
 
-		ws.getRow(4).height = 6;
+		ws.getRow(3).height = 6;
 
 		// Header row
-		var header = ws.getRow(5);
+		var header = ws.getRow(4);
 		header.height = 22;
 		["#", "Domain", "DR", "Tier"].forEach(function (label, i) {
 			header.getCell(i + 1).value = label;
@@ -1038,7 +1032,7 @@
 			domainCellRef.font = { color: { argb: BRAND.violetDeep }, underline: true };
 
 			var drCell = row.getCell(3);
-			drCell.numFmt = "0.#";
+			drCell.numFmt = (r.dr % 1 === 0) ? "0" : "0.0";
 			drCell.alignment = { horizontal: "center", vertical: "middle" };
 			drCell.font = { bold: true, color: { argb: argb(r.fg) } };
 			drCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(r.bg) } };
@@ -1056,7 +1050,7 @@
 			});
 		});
 
-		ws.autoFilter = { from: "A5", to: "D5" };
+		ws.autoFilter = { from: "A4", to: "D4" };
 
 		// Footer: the Ahrefs credit is required by their licence.
 		var last = ws.rowCount + 2;
