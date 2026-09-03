@@ -3,21 +3,20 @@
   ====================================
   Paste everything below into a Custom HTML block, or upload as index.html.
 
-  The worker URL is already filled in:
+  Needs the matching gfm-dr-worker.js deployed (batched requests).
+
+  Worker URL already filled in:
       https://gfm-dr.loofycorwin.workers.dev/
-  Nothing in this file needs editing.
 
-  Whatever host this sits on must be listed in ALLOWED_ORIGINS in the
-  worker, or the worker will refuse the request.
+  Whatever host this sits on must be listed in ALLOWED_ORIGINS in the worker.
 
-  Your Ahrefs key is NOT in this file and must never be added to it —
-  anyone can read a page's source. The key lives in the worker.
+  Your Ahrefs key is NOT in this file and must never be added to it.
 
-  Excel (.xlsx) import loads a reader from cdnjs on demand. CSV and TXT
-  import needs nothing external.
+  Spreadsheet reading and the branded Excel export load ExcelJS from cdnjs
+  on demand. CSV import needs nothing external.
 
-  The "Domain Rating by Ahrefs" credit in the footer is required by the
-  Ahrefs Domain Rating License. Leave it in place.
+  The "Domain Rating by Ahrefs" credit is required by the Ahrefs Domain
+  Rating License, in the widget footer and in the exported file. Leave both.
 -->
 
 <div id="dr-widget" class="gfm-dr">
@@ -32,10 +31,10 @@
 		<div class="drw-controls">
 			<button type="button" class="drw-primary" id="drw-check">Check DR</button>
 			<button type="button" class="drw-ghost" id="drw-clear">Clear</button>
-			<button type="button" class="drw-ghost" id="drw-csv" disabled>Download CSV</button>
+			<button type="button" class="drw-ghost" id="drw-csv" disabled>Download Excel</button>
 			<button type="button" class="drw-ghost" id="drw-copy" disabled>Copy</button>
 			<input type="file" id="drw-file" accept=".csv,.txt,.xlsx,.xls" hidden>
-			<label class="drw-file" for="drw-file">Upload CSV or Excel</label>
+			<label class="drw-file" for="drw-file"><span class="drw-file-txt">Upload CSV or Excel</span></label>
 			<span class="drw-count" id="drw-count">0 domains</span>
 		</div>
 		<div class="drw-progress" id="drw-progress"><span></span></div>
@@ -156,8 +155,11 @@
 .gfm-dr .drw-ghost:hover:not(:disabled) { background: var(--gfm-ground); }
 .gfm-dr .drw-ghost:disabled { opacity: .45; cursor: not-allowed; }
 
-/* The file picker's label is the visible button; the input itself is hidden. */
+/* The file picker's label is the visible button; the input itself is hidden.
+   A fill sweeps across it while the file is being read. */
 .gfm-dr .drw-file {
+	position: relative;
+	overflow: hidden;
 	display: inline-flex;
 	align-items: center;
 	font-size: .875rem;
@@ -169,12 +171,80 @@
 	background: #fff;
 	color: var(--gfm-ink);
 	border: 1px dashed var(--gfm-line);
+	transition: border-color .2s ease, background .2s ease, color .2s ease;
+	--fill: 0%;
 }
 .gfm-dr .drw-file:hover { background: var(--gfm-ground); border-color: var(--gfm-violet); }
 .gfm-dr input[type="file"]:focus-visible + .drw-file { outline: 2px solid var(--gfm-violet); outline-offset: 2px; }
 
+.gfm-dr .drw-file::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: var(--fill);
+	background: var(--gfm-violet);
+	opacity: .22;
+	transition: width .3s ease;
+	pointer-events: none;
+}
+.gfm-dr .drw-file-txt { position: relative; z-index: 1; }
+
+.gfm-dr .drw-file.is-uploading { border-style: solid; border-color: var(--gfm-violet); }
+.gfm-dr .drw-file.is-done {
+	border-style: solid;
+	border-color: var(--gfm-violet);
+	background: var(--gfm-violet);
+	color: #fff;
+}
+.gfm-dr .drw-file.is-done::before { opacity: 0; }
+.gfm-dr .drw-file.is-failed { border-style: solid; border-color: #a8710a; color: #a8710a; }
+
 .gfm-dr.is-dropping { border-color: var(--gfm-violet); box-shadow: 0 0 0 3px rgba(137, 99, 251, .15); }
 .gfm-dr.is-dropping .drw-file { border-color: var(--gfm-violet); background: var(--gfm-ground); }
+
+/* Confirmation that floats above a button after it is used. */
+.gfm-dr .drw-ghost { position: relative; }
+.gfm-dr .drw-ghost.is-flash {
+	background: var(--gfm-violet);
+	border-color: var(--gfm-violet);
+	color: #fff;
+}
+.gfm-dr .drw-ghost.is-flash::after {
+	content: attr(data-toast);
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 8px);
+	transform: translateX(-50%);
+	background: var(--gfm-ink);
+	color: #fff;
+	font-size: .72rem;
+	font-weight: 600;
+	white-space: nowrap;
+	padding: 5px 9px;
+	border-radius: 6px;
+	pointer-events: none;
+	animation: gfm-dr-toast .25s ease-out;
+}
+.gfm-dr .drw-ghost.is-flash::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 3px);
+	transform: translateX(-50%);
+	border: 5px solid transparent;
+	border-top-color: var(--gfm-ink);
+	pointer-events: none;
+}
+@keyframes gfm-dr-toast {
+	from { opacity: 0; transform: translate(-50%, 5px); }
+	to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.gfm-dr .drw-ghost.is-flash::after { animation: none; }
+	.gfm-dr .drw-file::before { transition: none; }
+}
 
 .gfm-dr .drw-count { font-size: .8rem; color: var(--gfm-muted); margin-left: auto; }
 .gfm-dr .drw-count.is-over { color: #a8710a; }
@@ -368,12 +438,16 @@
 	/* Most domains one visitor can submit at a time. */
 	var MAX_DOMAINS = 100;
 
-	var MAX_CONCURRENCY = 4;
+	/* Domains are sent in batches, so 100 domains is 10 requests rather than
+	   100. The worker looks each one up in its cache first and only calls
+	   Ahrefs for the misses, in parallel, from a machine close to Ahrefs. */
+	var CHUNK_SIZE = 10;
+	var CHUNK_CONCURRENCY = 3;
 
-	/* Starting pace. If Ahrefs throttles us mid-run we widen it automatically
-	   rather than failing the remaining domains. */
-	var START_INTERVAL_MS = 300;
-	var MAX_INTERVAL_MS = 2000;
+	/* Gap between batch starts. Widened automatically if we get throttled,
+	   rather than failing whatever is still queued. */
+	var START_INTERVAL_MS = 250;
+	var MAX_INTERVAL_MS = 3000;
 	var pace = START_INTERVAL_MS;
 	var REQUEST_TIMEOUT_MS = 20000;
 	var RETRY_ON_BUSY = 4;
@@ -393,6 +467,9 @@
 	var progressBar = progressWrap.querySelector("span");
 	var progressLabel = $("drw-progress-label");
 	var msgEl = $("drw-msg");
+	var fileInput = $("drw-file");
+	var fileLabel = document.querySelector(".gfm-dr .drw-file");
+	var FILE_LABEL_DEFAULT = "Upload CSV or Excel";
 
 	var results = [];
 	var sortKey = "dr";
@@ -453,17 +530,18 @@
 
 	/* One request. Resolves with a number, or rejects with a message
 	   already worded for a visitor to read. */
-	function fetchOnce(domain) {
+	/* One batch. Resolves with an array of {domain, dr} or {domain, error},
+	   in the order the worker returned them. */
+	function fetchChunk(domains) {
 		var ctrl = ("AbortController" in window) ? new AbortController() : null;
 		var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, REQUEST_TIMEOUT_MS) : null;
 
-		var url = ENDPOINT + "?target=" + encodeURIComponent(domain);
+		var url = ENDPOINT + "?targets=" + encodeURIComponent(domains.join(","));
 		var opts = { method: "GET", headers: { "Accept": "application/json" } };
 		if (ctrl) opts.signal = ctrl.signal;
 
 		var request = fetch(url, opts).catch(function (e) {
 			// Sandboxed preview frames can't pass an AbortSignal across windows.
-			// Drop it and go again rather than failing the lookup.
 			if (/clone|postMessage/i.test((e && e.message) || "")) {
 				delete opts.signal;
 				return fetch(url, opts);
@@ -482,9 +560,8 @@
 					err.busy = (res.status === 429);
 					throw err;
 				}
-				var dr = data && data.domain_rating && data.domain_rating.domain_rating;
-				if (dr == null || isNaN(dr)) throw new Error("No score available");
-				return Math.round(Number(dr) * 10) / 10;
+				if (!data || !data.results) throw new Error("Unexpected reply");
+				return data.results;
 			});
 		}).catch(function (err) {
 			if (timer) clearTimeout(timer);
@@ -494,47 +571,79 @@
 		});
 	}
 
-	function fetchDR(domain, attempt) {
+	/* Fetch one batch, retrying the whole batch if the worker says busy. */
+	function fetchChunkWithRetry(domains, attempt) {
 		attempt = attempt || 0;
-		return fetchOnce(domain).then(function (dr) {
-			var t = tierFor(dr);
-			return { domain: domain, dr: dr, tier: t.label, bg: t.bg, fg: t.fg, status: "ok", error: "" };
-		}).catch(function (err) {
+		return fetchChunk(domains).catch(function (err) {
 			if (err.busy) {
-				// Throttled: slow everything still queued, then retry this one.
 				pace = Math.min(pace * 2, MAX_INTERVAL_MS);
 				if (attempt < RETRY_ON_BUSY) {
 					return sleep(RETRY_DELAY_MS * (attempt + 1)).then(function () {
-						return fetchDR(domain, attempt + 1);
+						return fetchChunkWithRetry(domains, attempt + 1);
 					});
 				}
 			}
-			return { domain: domain, dr: null, tier: "", status: "error", error: err.message || "Lookup failed" };
+			// Whole batch failed: report it against each domain in it.
+			return domains.map(function (d) {
+				return { domain: d, error: err.message || "Lookup failed" };
+			});
 		});
 	}
 
+	function applyResult(item, position) {
+		if (item && typeof item.dr === "number") {
+			var t = tierFor(item.dr);
+			results[position] = {
+				domain: item.domain, dr: item.dr, tier: t.label,
+				bg: t.bg, fg: t.fg, status: "ok", error: ""
+			};
+		} else {
+			results[position] = {
+				domain: (item && item.domain) || results[position].domain,
+				dr: null, tier: "", status: "error",
+				error: (item && item.error) || "No score available"
+			};
+		}
+	}
+
 	function runQueue(domains) {
+		var position = {};
+		domains.forEach(function (d, i) { position[d] = i; });
+
+		var chunks = [];
+		for (var i = 0; i < domains.length; i += CHUNK_SIZE) {
+			chunks.push(domains.slice(i, i + CHUNK_SIZE));
+		}
+
 		return new Promise(function (resolve) {
-			var idx = 0, active = 0, done = 0, lastStart = 0;
+			var next = 0, active = 0, done = 0, lastStart = 0;
 			var total = domains.length;
 
 			function tick() {
 				if (done === total) { resolve(); return; }
-				while (active < MAX_CONCURRENCY && idx < total) {
+				while (active < CHUNK_CONCURRENCY && next < chunks.length) {
 					var wait = Math.max(0, lastStart + pace - Date.now());
 					if (wait > 0) { setTimeout(tick, wait); return; }
 					lastStart = Date.now();
 					active++;
-					(function (domain, position) {
-						fetchDR(domain).then(function (r) {
-							results[position] = r;
-							active--; done++;
+					(function (chunk) {
+						fetchChunkWithRetry(chunk).then(function (items) {
+							// Match replies back by domain, not by array order.
+							var byDomain = {};
+							(items || []).forEach(function (it) {
+								if (it && it.domain) byDomain[it.domain] = it;
+							});
+							chunk.forEach(function (d) {
+								applyResult(byDomain[d] || { domain: d, error: "No reply" }, position[d]);
+								done++;
+							});
+							active--;
 							setProgress(done, total);
 							renderTable();
 							tick();
 						});
-					})(domains[idx], idx);
-					idx++;
+					})(chunks[next]);
+					next++;
 				}
 			}
 			tick();
@@ -657,33 +766,31 @@
 		return lines.join("\n");
 	}
 
-	function toCSV() {
-		var rows = sortResults();
-		var lines = ['"domain","domain_rating","tier","status"'];
-		for (var i = 0; i < rows.length; i++) {
-			var r = rows[i];
-			lines.push('"' + r.domain + '","' + (r.dr == null ? "" : r.dr) + '","' +
-				(r.tier || "") + '","' + (r.status === "ok" ? "ok" : r.error) + '"');
-		}
-		return lines.join("\n");
-	}
-
 	/* ---------- Importing a file ---------- */
 
-	var XLSX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-	var xlsxLoading = null;
+	/* ExcelJS reads .xlsx and writes the branded export. Loaded only when
+	   someone actually uses a spreadsheet, so the page stays light. */
+	var EXCEL_CDN = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+	var excelLoading = null;
 
-	function loadXlsx() {
-		if (window.XLSX) return Promise.resolve(window.XLSX);
-		if (xlsxLoading) return xlsxLoading;
-		xlsxLoading = new Promise(function (resolve, reject) {
+	function loadExcel() {
+		if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+		if (excelLoading) return excelLoading;
+		excelLoading = new Promise(function (resolve, reject) {
 			var tag = document.createElement("script");
-			tag.src = XLSX_CDN;
-			tag.onload = function () { resolve(window.XLSX); };
+			tag.src = EXCEL_CDN;
+			tag.onload = function () { resolve(window.ExcelJS); };
 			tag.onerror = function () { reject(new Error("Could not load the spreadsheet reader")); };
 			document.head.appendChild(tag);
 		});
-		return xlsxLoading;
+		return excelLoading;
+	}
+
+	/* A cell value can be text, a number, a hyperlink object or rich text. */
+	function cellText(v) {
+		if (v == null) return "";
+		if (typeof v === "object") return v.text || v.hyperlink || v.result || "";
+		return String(v);
 	}
 
 	/* Pull anything domain-shaped out of arbitrary text or cells. */
@@ -710,6 +817,45 @@
 			(kept > MAX_DOMAINS ? " \u2014 only the first " + MAX_DOMAINS + " will be checked" : ""));
 	}
 
+	/* ---------- Button feedback ---------- */
+
+	function fileLabelText(text) {
+		var span = fileLabel && fileLabel.querySelector(".drw-file-txt");
+		if (span) span.textContent = text;
+	}
+
+	function setUploadProgress(pct) {
+		if (!fileLabel) return;
+		fileLabel.classList.add("is-uploading");
+		fileLabel.style.setProperty("--fill", pct + "%");
+	}
+
+	function endUpload(ok, count) {
+		if (!fileLabel) return;
+		setUploadProgress(100);
+		fileLabel.classList.remove("is-uploading");
+		fileLabel.classList.add(ok ? "is-done" : "is-failed");
+		fileLabelText(ok ? "Uploaded \u2713 " + count + " found" : "Upload failed");
+		setTimeout(function () {
+			fileLabel.classList.remove("is-done", "is-failed");
+			fileLabel.style.setProperty("--fill", "0%");
+			fileLabelText(FILE_LABEL_DEFAULT);
+		}, 2600);
+	}
+
+	/* Brief confirmation floating above a button. */
+	function flashButton(btn, label, keepMs) {
+		if (!btn) return;
+		var original = btn.textContent;
+		btn.setAttribute("data-toast", label);
+		btn.classList.add("is-flash");
+		setTimeout(function () {
+			btn.classList.remove("is-flash");
+			btn.removeAttribute("data-toast");
+			btn.textContent = original;
+		}, keepMs || 1600);
+	}
+
 	function importFile(file) {
 		if (!file) return;
 		var name = file.name || "file";
@@ -717,42 +863,199 @@
 
 		if (file.size > 5 * 1024 * 1024) {
 			setMsg("That file is too large (5MB limit)", true);
+			endUpload(false);
 			return;
 		}
 
-		setMsg("Reading " + name + "\u2026");
+		fileLabelText("Reading " + name);
+		setUploadProgress(12);
 
 		if (!isExcel) {
 			var reader = new FileReader();
-			reader.onload = function () { addDomains(harvestDomains(reader.result), name); };
-			reader.onerror = function () { setMsg("Could not read " + name, true); };
+			reader.onprogress = function (e) {
+				if (e.lengthComputable) {
+					setUploadProgress(12 + Math.round((e.loaded / e.total) * 60));
+				}
+			};
+			reader.onload = function () {
+				setUploadProgress(85);
+				var found = harvestDomains(reader.result);
+				addDomains(found, name);
+				endUpload(found.length > 0, found.length);
+			};
+			reader.onerror = function () {
+				setMsg("Could not read " + name, true);
+				endUpload(false);
+			};
 			reader.readAsText(file);
 			return;
 		}
 
-		loadXlsx().then(function (XLSX) {
+		setUploadProgress(25);
+		loadExcel().then(function (ExcelJS) {
+			setUploadProgress(45);
 			var reader = new FileReader();
 			reader.onload = function () {
-				try {
-					var wb = XLSX.read(new Uint8Array(reader.result), { type: "array" });
+				setUploadProgress(70);
+				var wb = new ExcelJS.Workbook();
+				wb.xlsx.load(reader.result).then(function () {
 					var found = [];
-					wb.SheetNames.forEach(function (sheetName) {
-						var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
-						rows.forEach(function (row) {
-							(row || []).forEach(function (cell) {
-								found = found.concat(harvestDomains(cell));
+					wb.eachSheet(function (sheet) {
+						sheet.eachRow(function (row) {
+							row.eachCell({ includeEmpty: false }, function (cell) {
+								found = found.concat(harvestDomains(cellText(cell.value)));
 							});
 						});
 					});
 					addDomains(found, name);
-				} catch (e) {
+					endUpload(found.length > 0, found.length);
+				}).catch(function () {
 					setMsg("Could not read that spreadsheet", true);
-				}
+					endUpload(false);
+				});
 			};
-			reader.onerror = function () { setMsg("Could not read " + name, true); };
+			reader.onerror = function () {
+				setMsg("Could not read " + name, true);
+				endUpload(false);
+			};
 			reader.readAsArrayBuffer(file);
 		}).catch(function (e) {
 			setMsg(e.message + " \u2014 try saving as CSV instead", true);
+			endUpload(false);
+		});
+	}
+
+	/* ---------- Branded Excel export ---------- */
+
+	var BRAND = {
+		violet: "FF8963FB",
+		violetDeep: "FF5B32C4",
+		ink: "FF222225",
+		line: "FFE6E3F0",
+		ground: "FFFAF9FE",
+		white: "FFFFFFFF"
+	};
+
+	function argb(hex) { return "FF" + String(hex).replace("#", "").toUpperCase(); }
+
+	function thinBorder() {
+		var side = { style: "thin", color: { argb: BRAND.line } };
+		return { top: side, left: side, bottom: side, right: side };
+	}
+
+	function buildWorkbook(ExcelJS) {
+		var rows = sortResults().filter(function (r) { return r.status === "ok"; });
+		var wb = new ExcelJS.Workbook();
+		wb.creator = "Gold Flex Marketing";
+		wb.created = new Date();
+
+		var ws = wb.addWorksheet("Domain Ratings", {
+			views: [{ state: "frozen", ySplit: 5 }]
+		});
+		ws.columns = [{ width: 42 }, { width: 12 }, { width: 20 }];
+
+		// Title band
+		ws.mergeCells("A1:C1");
+		var title = ws.getCell("A1");
+		title.value = "Bulk Domain Rating Checker";
+		title.font = { bold: true, size: 15, color: { argb: BRAND.white } };
+		title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND.violetDeep } };
+		title.alignment = { vertical: "middle", indent: 1 };
+		ws.getRow(1).height = 30;
+
+		// Branding line, clickable
+		ws.mergeCells("A2:C2");
+		var link = ws.getCell("A2");
+		link.value = { text: "goldflexmarketing.com", hyperlink: "https://goldflexmarketing.com/" };
+		link.font = { color: { argb: BRAND.violetDeep }, underline: true, size: 10, bold: true };
+		link.alignment = { indent: 1 };
+
+		ws.mergeCells("A3:C3");
+		var when = ws.getCell("A3");
+		when.value = "Generated " + new Date().toLocaleDateString() +
+			"  \u00b7  Data: Domain Rating by Ahrefs";
+		when.font = { color: { argb: "FF6B6B78" }, size: 9 };
+		when.alignment = { indent: 1 };
+
+		ws.getRow(4).height = 6; // breathing room
+
+		// Header row
+		var header = ws.getRow(5);
+		header.height = 22;
+		["Domain", "DR", "Tier"].forEach(function (label, i) {
+			header.getCell(i + 1).value = label;
+		});
+		header.eachCell({ includeEmpty: true }, function (cell) {
+			cell.font = { bold: true, color: { argb: BRAND.white }, size: 11 };
+			cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND.violet } };
+			cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+			cell.border = thinBorder();
+		});
+
+		// Data rows
+		rows.forEach(function (r, i) {
+			var row = ws.addRow([null, r.dr, r.tier]);
+			var domainCellRef = row.getCell(1);
+			domainCellRef.value = { text: r.domain, hyperlink: "https://" + r.domain };
+			domainCellRef.font = { color: { argb: BRAND.violetDeep }, underline: true };
+
+			var drCell = row.getCell(2);
+			drCell.numFmt = "0.#";
+			drCell.alignment = { horizontal: "center" };
+			drCell.font = { bold: true, color: { argb: argb(r.fg) } };
+			drCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(r.bg) } };
+
+			row.eachCell({ includeEmpty: true }, function (cell, col) {
+				cell.border = thinBorder();
+				if (col !== 2) cell.alignment = { indent: 1, vertical: "middle" };
+				if (col !== 2 && i % 2 === 1) {
+					cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND.ground } };
+				}
+			});
+		});
+
+		ws.autoFilter = { from: "A5", to: "C5" };
+
+		// Footer: the Ahrefs credit is required by their licence.
+		var last = ws.rowCount + 2;
+		ws.mergeCells("A" + last + ":C" + last);
+		var foot = ws.getCell("A" + last);
+		foot.value = {
+			text: "Domain Rating by Ahrefs \u00b7 Checked with the free tool at goldflexmarketing.com",
+			hyperlink: "https://goldflexmarketing.com/"
+		};
+		foot.font = { color: { argb: "FF6B6B78" }, size: 9 };
+		foot.alignment = { indent: 1 };
+
+		return wb;
+	}
+
+	function downloadExcel() {
+		if (!results.some(function (r) { return r && r.status === "ok"; })) {
+			setMsg("Nothing to export yet", true);
+			return;
+		}
+		btnCsv.disabled = true;
+		flashButton(btnCsv, "Preparing\u2026", 800);
+
+		loadExcel().then(function (ExcelJS) {
+			return buildWorkbook(ExcelJS).xlsx.writeBuffer();
+		}).then(function (buffer) {
+			var blob = new Blob([buffer], {
+				type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+			});
+			var a = document.createElement("a");
+			a.href = URL.createObjectURL(blob);
+			a.download = "domain-ratings-" + new Date().toISOString().slice(0, 10) + ".xlsx";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(a.href);
+			btnCsv.disabled = false;
+			flashButton(btnCsv, "Downloaded \u2713");
+		}).catch(function (e) {
+			btnCsv.disabled = false;
+			setMsg("Could not build the file \u2014 use Copy instead", true);
 		});
 	}
 
@@ -760,7 +1063,6 @@
 
 	input.addEventListener("input", updateCount);
 
-	var fileInput = $("drw-file");
 	if (fileInput) {
 		fileInput.addEventListener("change", function () {
 			importFile(this.files && this.files[0]);
@@ -799,6 +1101,11 @@
 		renderTable();
 		btnCsv.disabled = true;
 		btnCopy.disabled = true;
+		if (fileLabel) {
+			fileLabel.classList.remove("is-done", "is-failed", "is-uploading");
+			fileLabel.style.setProperty("--fill", "0%");
+			fileLabelText(FILE_LABEL_DEFAULT);
+		}
 		setMsg("");
 		progressWrap.style.display = "none";
 		progressLabel.style.display = "none";
@@ -844,21 +1151,12 @@
 		});
 	});
 
-	btnCsv.addEventListener("click", function () {
-		var blob = new Blob([toCSV()], { type: "text/csv;charset=utf-8" });
-		var a = document.createElement("a");
-		a.href = URL.createObjectURL(blob);
-		a.download = "domain-ratings.csv";
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		URL.revokeObjectURL(a.href);
-	});
+	btnCsv.addEventListener("click", downloadExcel);
 
 	btnCopy.addEventListener("click", function () {
 		if (navigator.clipboard && navigator.clipboard.writeText) {
 			navigator.clipboard.writeText(toTSV()).then(function () {
-				setMsg("Copied — paste straight into Excel");
+				flashButton(btnCopy, "Copied \u2713");
 			});
 		} else {
 			setMsg("Copying is not supported in this browser", true);
