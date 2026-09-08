@@ -1,63 +1,86 @@
 <!--
-  Gold Flex Bulk Domain Rating Checker
-  ====================================
-  Paste everything below into a Custom HTML block, or upload as index.html.
+  Gold Flex Bulk Domain Rating Checker — standalone widget
+  ========================================================
+  Self-contained. Paste into a Custom HTML block anywhere on the page.
 
-  Needs the matching gfm-dr-worker.js deployed (batched requests).
+  ISOLATION
+  Everything renders inside a shadow root, so your theme's CSS cannot reach
+  into the widget and the widget's CSS cannot leak out. No class names, IDs
+  or global variables are shared with the page. Safe alongside Elementor,
+  Bootstrap, page builders, or any other plugin.
 
-  Worker URL already filled in:
+  The only thing inherited from the page is the typeface, on purpose, so the
+  tool doesn't look bolted on. To force a specific font instead, add a
+  font-family rule to the :host block inside the styles below.
+
+  REQUIREMENTS
+  Needs gfm-dr-worker.js deployed on Cloudflare. Worker URL already set:
       https://gfm-dr.loofycorwin.workers.dev/
-
-  Whatever host this sits on must be listed in ALLOWED_ORIGINS in the worker.
+  goldflexmarketing.com must be listed in ALLOWED_ORIGINS in that worker.
 
   Your Ahrefs key is NOT in this file and must never be added to it.
 
-  Spreadsheet reading and the branded Excel export load ExcelJS from cdnjs
-  on demand. CSV import needs nothing external.
-
   The "Domain Rating by Ahrefs" credit is required by the Ahrefs Domain
-  Rating License, in the widget footer and in the exported file. Leave both.
+  Rating License. Keep the footer line.
 -->
 
-<div id="dr-widget" class="gfm-dr">
-	<div class="drw-head">
-		<h2>Bulk Domain Rating Checker</h2>
-		<p>Check the Ahrefs Domain Rating of up to 100 sites at once. Paste them in or upload a CSV or Excel file.</p>
-	</div>
+<div id="gfm-dr-host"></div>
 
-	<div class="drw-body">
-		<label class="drw-label" for="drw-input">One domain per line</label>
-		<textarea id="drw-input" rows="5" spellcheck="false" placeholder="ahrefs.com&#10;semrush.com&#10;moz.com"></textarea>
-		<div class="drw-controls">
-			<button type="button" class="drw-primary" id="drw-check">Check DR</button>
-			<button type="button" class="drw-ghost" id="drw-clear">Clear</button>
-			<button type="button" class="drw-ghost" id="drw-csv" disabled>Download Excel</button>
-			<button type="button" class="drw-ghost" id="drw-copy" disabled>Copy</button>
-			<input type="file" id="drw-file" accept=".csv,.txt,.xlsx,.xls" hidden>
-			<label class="drw-file" for="drw-file"><span class="drw-file-txt">Upload CSV or Excel</span></label>
-			<span class="drw-count" id="drw-count">0 domains</span>
+<script>
+(function () {
+	"use strict";
+
+	var host = document.getElementById("gfm-dr-host");
+	if (!host || host.getAttribute("data-mounted")) { return; }
+	host.setAttribute("data-mounted", "1");
+
+	var TEMPLATE = `
+	<div id="dr-widget" class="gfm-dr">
+		<div class="drw-body">
+			<label class="drw-label" for="drw-input">One domain per line</label>
+			<textarea id="drw-input" rows="5" spellcheck="false" placeholder="ahrefs.com&#10;semrush.com&#10;moz.com"></textarea>
+			<div class="drw-controls">
+				<button type="button" class="drw-primary" id="drw-check">Check DR</button>
+				<button type="button" class="drw-ghost" id="drw-clear">Clear</button>
+				<button type="button" class="drw-ghost" id="drw-csv" disabled>Download Excel</button>
+				<button type="button" class="drw-ghost" id="drw-copy" disabled>Copy</button>
+				<input type="file" id="drw-file" accept=".csv,.txt,.xlsx,.xls" hidden>
+				<label class="drw-file" for="drw-file"><span class="drw-file-txt">Upload CSV or Excel</span></label>
+				<span class="drw-count" id="drw-count">0 domains</span>
+			</div>
+			<div class="drw-progress" id="drw-progress"><span></span></div>
+			<p class="drw-progress-label" id="drw-progress-label" aria-live="polite"></p>
 		</div>
-		<div class="drw-progress" id="drw-progress"><span></span></div>
-		<p class="drw-progress-label" id="drw-progress-label" aria-live="polite"></p>
-	</div>
 
-	<div class="drw-results" id="drw-results">
-		<p class="drw-empty">Scores will appear here.</p>
-	</div>
+		<div class="drw-results" id="drw-results">
+			<p class="drw-empty">Scores will appear here.</p>
+		</div>
 
-	<div class="drw-foot">
-		<span>
-			Data: <a href="https://ahrefs.com/" target="_blank" rel="nofollow noopener">Domain Rating by Ahrefs</a>
-			&middot; <a href="http://ahrefs.com/legal/domain-rating-license" target="_blank" rel="nofollow noopener">License</a>
-		</span>
-		<span id="drw-msg"></span>
+		<div class="drw-foot">
+			<span>
+				Data: <a href="https://ahrefs.com/" target="_blank" rel="nofollow noopener">Domain Rating by Ahrefs</a>
+				&middot; <a href="http://ahrefs.com/legal/domain-rating-license" target="_blank" rel="nofollow noopener">License</a>
+			</span>
+			<span id="drw-msg"></span>
+		</div>
 	</div>
-</div>
+`;
 
-<style>
+	var STYLES = `
 /* Gold Flex Bulk DR Checker
    Inherits the theme's typeface so the tool reads as part of the site.
    Only the DR badges and the primary button carry brand colour. */
+
+:host {
+	display: block;
+	/* Inherit only the typeface from the page; everything else is ours.
+	   CSS containment is deliberately not used here: paint containment
+	   would clip the tooltip and the drag-and-drop glow. */
+	font-family: inherit;
+	line-height: 1.5;
+	color: #222225;
+	text-align: left;
+}
 
 .gfm-dr {
 	--gfm-violet: #8963fb;
@@ -435,19 +458,32 @@
 	.gfm-dr .drw-meter { max-width: 90px; margin-bottom: 0; }
 	.gfm-dr .drw-stat { flex-basis: 45%; }
 }
-</style>
+`;
 
-<script>
+	/* Shadow root where supported; plain div otherwise (very old browsers). */
+	var root = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;
+
+	var styleTag = document.createElement("style");
+	styleTag.textContent = STYLES;
+	root.appendChild(styleTag);
+
+	var holder = document.createElement("div");
+	holder.innerHTML = TEMPLATE;
+	while (holder.firstChild) { root.appendChild(holder.firstChild); }
+
+	/* Belt and braces: stop any other copy of this script auto-mounting. */
+	window.GFM_DR_MANUAL_INIT = true;
+
 /* Gold Flex Bulk DR Checker — front end.
-   Talks only to this site's own REST route; the Ahrefs key lives on the server. */
-(function () {
+   Mounts into any root: the document, or a shadow root for full isolation.
+   The Ahrefs key never reaches this file; it lives on the worker. */
+window.GFM_DR_INIT = function (root, CFG) {
 	"use strict";
 
-	/* Your Cloudflare Worker. Already filled in. */
-	var ENDPOINT = "https://gfm-dr.loofycorwin.workers.dev/";
-
-	/* Most domains one visitor can submit at a time. */
-	var MAX_DOMAINS = 100;
+	root = root || document;
+	CFG = CFG || window.GFM_DR || {};
+	var ENDPOINT = CFG.endpoint || "/wp-json/gfm/v1/dr";
+	var MAX_DOMAINS = CFG.maxDomains || 20;
 
 	/* Domains are sent in batches, so 100 domains is 10 requests rather than
 	   100. The worker looks each one up in its cache first and only calls
@@ -464,7 +500,8 @@
 	var RETRY_ON_BUSY = 4;
 	var RETRY_DELAY_MS = 1200;
 
-	var $ = function (id) { return document.getElementById(id); };
+	/* Scoped to the mount root, so a shadow root works exactly like the page. */
+	var $ = function (id) { return root.querySelector("#" + id); };
 	var input = $("drw-input");
 	if (!input) { return; }
 
@@ -479,7 +516,7 @@
 	var progressLabel = $("drw-progress-label");
 	var msgEl = $("drw-msg");
 	var fileInput = $("drw-file");
-	var fileLabel = document.querySelector(".gfm-dr .drw-file");
+	var fileLabel = root.querySelector(".drw-file");
 	var FILE_LABEL_DEFAULT = "Upload CSV or Excel";
 
 	var results = [];
@@ -1107,7 +1144,7 @@
 	}
 
 	/* Dropping a file anywhere on the widget imports it. */
-	var widget = document.getElementById("dr-widget");
+	var widget = root.querySelector("#dr-widget");
 	if (widget) {
 		["dragenter", "dragover"].forEach(function (evt) {
 			widget.addEventListener(evt, function (e) {
@@ -1200,5 +1237,13 @@
 	});
 
 	updateCount();
+};
+
+
+
+	window.GFM_DR_INIT(root, {
+		endpoint: "https://gfm-dr.loofycorwin.workers.dev/",
+		maxDomains: 100
+	});
 })();
 </script>
